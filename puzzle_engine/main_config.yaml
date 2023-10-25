@@ -1,0 +1,18 @@
+#Config file used for non-engine-specific attributes
+
+#List name of engine to test
+engines:
+  - "katago"
+
+#Engines File
+engines_path: "/Users/blake/Research/Puzzle-Engine/external_engines"
+
+#Board size used for testing 
+boardsize: 7
+
+#Set to true if you want to run all tests
+runalltests: true
+
+#Only need to fill in if you want to list specific puzzles to run
+run_tests:
+  - "None"
