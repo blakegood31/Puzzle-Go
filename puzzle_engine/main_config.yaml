@@ -3,9 +3,14 @@
 #List name of engine to test
 engines:
   - "katago"
+  - "leela"
+  - "test"
 
-#Engines File
-engines_path: "/Users/blake/Research/Puzzle-Engine/external_engines"
+#Engines Folder
+engines_path: "/Users/blake/Research/Puzzle-Go/external_engines/"
+
+#Folder storing tests (sgf files)
+puzzles_path: "/Users/blake/Research/Puzzle-Go/puzzle_files/"
 
 #Board size used for testing 
 boardsize: 7

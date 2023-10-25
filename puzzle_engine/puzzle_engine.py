@@ -5,73 +5,67 @@ import numpy as np
 import os
 
 class PuzzleEngine:
-    def __init__(self, config, puzzles):
+    def __init__(self, config, puzzles, engine_config):
         self.config = config
         self.puzzles = puzzles
         self.process = None
-        self.engineconfig = None
+        self.engineconfig = engine_config
 
     def run_tests(self):
         #Run the necessary tests
 
-        #Start a new process
-        with open(self.config, "r") as stream:
-            try:
-                self.engineconfig = yaml.safe_load(stream)
-                # print(self.sensitive_config)
-            except yaml.YAMLError as exc:
-                raise ValueError(exc)
+        for puzzle in self.puzzles:
+            #Start the external engine
+            self.process = subprocess.Popen(self.engineconfig['command'], stdin=PIPE, stdout=PIPE, 
+                                                cwd=self.engineconfig['cwdpath'], encoding="utf8")
 
-        #TODO: Add loop to run all tests
-        #TODO: Add logging functionality to save results to file
-        
-        #Start the external engine
-        self.process = subprocess.Popen(self.engineconfig['command'], stdin=PIPE, stdout=PIPE, 
-                                            cwd=self.engineconfig['cwdpath'], encoding="utf8")
+            #Used for testing functionality
+            output = []
 
-        #Used for testing functionality
-        output = []
+            #set boardsize for game
+            self.set_boardsize()
 
-        #set boardsize for game
-        self.set_boardsize()
+            #load in specified sgf file
+            self.load_sgf(puzzle)
 
-        #load in specified sgf file
-        self.load_sgf("TestGame.sgf")
+            #process SGF file for internal use
+            board, next_player = self.parse_sgf(puzzle)
 
-        #process SGF file for internal use
-        board, next_player = self.parse_sgf("TestGame.sgf")
-        print(board)
-        print("Next Player: ", next_player)
-
-        #generate move for player B and save result
-        #TODO: Add method to handle genmove command
-        self.process.stdin.write('genmove B\n')
-        self.process.stdin.flush()
-        genmove_response = self.process.stdout.readline()
-        response = "Made Move: " + genmove_response
-        output.append(response)
-        self.process.stdout.readline()
+            #generate move for player B and save result
+            #TODO: Add method to handle genmove command
+            genmove_cmd = "genmove " + next_player + "\n"
+            self.process.stdin.write(genmove_cmd)
+            self.process.stdin.flush()
+            genmove_response = self.process.stdout.readline()
+            response = "Made Move: " + genmove_response
+            output.append(response)
+            self.process.stdout.readline()
 
 
-        #display new board
-        self.process.stdin.write('showboard\n')
-        self.process.stdin.flush()
-        self.process.stdout.readline() #skip a line of output
-        #read in a 7x7 board and save it
-        text=""
-        for i in range(8):
-            text = self.process.stdout.readline()
-            output.append(text)
+            #display new board
+            self.process.stdin.write('showboard\n')
+            self.process.stdin.flush()
+            self.process.stdout.readline() #skip a line of output
+            #read in a 7x7 board and save it
+            text=""
+            for i in range(8):
+                text = self.process.stdout.readline()
+                output.append(text)
 
-        #quit katago
-        self.process.stdin.write('quit\n')
-        self.process.stdin.flush()
-        response = "Quit response: " + self.process.stdout.readline()
+            #quit katago
+            self.process.stdin.write('quit\n')
+            self.process.stdin.flush()
+            response = "Quit response: " + self.process.stdout.readline()
 
-        #print results
-        print("\n--RESULTS--\n")  
-        for i in range(len(output)):
-            print(output[i].replace("\n", ""))
+            #print results
+            print("\n--RESULTS--\n")  
+            for i in range(len(output)):
+                print(output[i].replace("\n", ""))
+            
+            print(board)
+            print("Next Player: ", next_player)
+
+            print("\n\n\n\n\n\n-------------------------\n\n\n\n\n")
 
 
 
@@ -86,7 +80,7 @@ class PuzzleEngine:
     
     def load_sgf(self, puzzle_name):
         #Used to initialize board state so engine can solve a puzzle
-        loadcmd = 'loadsgf ' + self.engineconfig['puzzlespath'] + puzzle_name + '\n'
+        loadcmd = 'loadsgf ' + self.config['puzzles_path'] + puzzle_name + '\n'
         self.process.stdin.write(loadcmd)
         self.process.stdin.flush()
         #skip unwanted lines of output
@@ -104,7 +98,7 @@ class PuzzleEngine:
             - Next player 
         """
         #Get SGF file as text
-        filepath = self.engineconfig['puzzlespath'] + puzzle_name
+        filepath = self.config['puzzles_path'] + puzzle_name
         with open(filepath) as f:
             temp = f.read()
         temp = temp.replace("(", "").replace(")", "")
