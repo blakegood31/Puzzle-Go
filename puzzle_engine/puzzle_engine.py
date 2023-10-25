@@ -90,7 +90,9 @@ class PuzzleEngine:
 
     def parse_sgf(self, puzzle_name):
         """
-        Read in the given puzzle and get list of moves
+        Read in the given puzzle in SGF format, parse the SGF file 
+        into list of moves, and return the matrix representation of the board 
+        and the color of the next player (B or W)
         Input: 
             - Name of the puzzle to load 
         Returns: 
@@ -116,6 +118,17 @@ class PuzzleEngine:
 
 
     def sgf_to_matrix(self, moves, size):
+        """
+        Method to make a numpy matrix from a parsed SGF file 
+
+        Input: 
+            - moves: A list of moves, where each move is a list ['Player', 'GTP vertex']
+            - size: the size of the board 
+        
+        Output:
+            - A 2-D numpy array corresponding to the board given by the SGF file 
+                -   1 = Black stones; -1 = White stones
+        """
         board = np.zeros((int(size), int(size)))
         next_player = ""
         for elt in moves:
@@ -130,6 +143,14 @@ class PuzzleEngine:
 
 
     def sgf_vertex_to_idx(self, v):
+        """
+        Method to convert gtp vertices of letters in the form 'column''row'
+        into indices to be used with a matrix
+        
+        Input: a vertex 'v'
+
+        Output: matrix indices row, col
+        """
         letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'
                     'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's']
         col = letters.index(v[0])
@@ -140,8 +161,3 @@ class PuzzleEngine:
     def save_test_result(self):
         #Do Nothing yet
         print()
-
-"""test1 = PuzzleEngine("katago_config.yaml", '/Users/blake/Research/Puzzle-Engine/puzzle_files/TestGame.sgf\n')
-test1.run_tests()"""
-
-#print(os.getcwd())
