@@ -4,6 +4,9 @@ import os
 
 
 def load_config(filename):
+    """
+    Method to load in configuration files (yaml format)
+    """
     with open(filename, "r") as stream:
         try:
             config = yaml.safe_load(stream)
@@ -12,13 +15,13 @@ def load_config(filename):
             raise ValueError(exc)
 
 if __name__ == '__main__':
+    #Load in main config file
     config = load_config("main_config.yaml")
 
-    #TODO: Add functionality to run tests for all specified engines
+    #Check if necessary information for the engines listed in main config exist,
+    #and add them to a dictionary of engines to be tested
     listed_engines = config['engines']
     engines = {}
-    engine_configs = {}
-    engine_folders = {}
     for engine in listed_engines:
         engine_path = config["engines_path"] + engine + "/" 
         if os.path.exists(engine_path):
@@ -35,14 +38,10 @@ if __name__ == '__main__':
             print("No config file exists for -->", engine, "<-- will not add to tested engines." )
 
 
+    #Gather all the puzzles to test the engines on
     puzzles = os.listdir(config["puzzles_path"])
+    #Run the tests for each engine
     for engine in engines:
         engine_config = load_config(engines[engine]["config_path"])
         puzzleEngine = PuzzleEngine(config, puzzles, engine_config)
         puzzleEngine.run_tests()
-
-        
-        
-    #for engine in 
-    #test1 = PuzzleEngine("katago_config.yaml", '/Users/blake/Research/Puzzle-Engine/puzzle_files/TestGame.sgf\n')
-    #test1.run_tests()
