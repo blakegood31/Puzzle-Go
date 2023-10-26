@@ -10,6 +10,7 @@ class PuzzleEngine:
         self.puzzles = puzzles
         self.process = None
         self.engineconfig = engine_config
+        self.board = None
 
     def run_tests(self):
         #Run the necessary tests
@@ -19,28 +20,29 @@ class PuzzleEngine:
             self.process = subprocess.Popen(self.engineconfig['command'], stdin=PIPE, stdout=PIPE, 
                                                 cwd=self.engineconfig['cwdpath'], encoding="utf8")
 
+            self.board = np.zeros((int(self.config['boardsize']), int(self.config['boardsize'])))
             #Used for testing functionality
             output = []
 
             #set boardsize for game
-            self.set_boardsize()
+            self.boardsize_cmd()
 
             #load in specified sgf file
-            self.load_sgf(puzzle)
+            self.loadsgf_cmd(puzzle)
 
             #process SGF file for internal use
-            board, next_player = self.parse_sgf(puzzle)
+            moves, curr_player, prev_player = self.parse_sgf(puzzle)
 
-            #generate move for player B and save result
-            #TODO: Add method to handle genmove command
-            genmove_cmd = "genmove " + next_player + "\n"
-            self.process.stdin.write(genmove_cmd)
-            self.process.stdin.flush()
-            genmove_response = self.process.stdout.readline()
-            response = "Made Move: " + genmove_response
+            #create matrix from SGF moves (stored in self.board)
+            self.sgf_to_matrix(moves)
+
+
+            #have engine generate move for the next player in the game and save result
+            response, curr_player, prev_player = self.genmove_cmd(curr_player)
             output.append(response)
-            self.process.stdout.readline()
 
+            #update the matrix representation of the board with the new move
+            self.update_board(response, prev_player)
 
             #display new board
             self.process.stdin.write('showboard\n')
@@ -62,15 +64,23 @@ class PuzzleEngine:
             for i in range(len(output)):
                 print(output[i].replace("\n", ""))
             
-            print(board)
-            print("Next Player: ", next_player)
+            print(self.board)
+            print("Next Player: ", curr_player)
+            print("Previous Player: ", prev_player)
 
             print("\n\n\n\n\n\n-------------------------\n\n\n\n\n")
 
 
 
-    def set_boardsize(self):
-        cmd = "boardsize " + str(self.engineconfig['boardsize']) + "\n"
+    def boardsize_cmd(self):
+        """
+        Method to send a 'boardsize' command to the running engine.
+            - This will set the engine's board size to whatever is 
+               specified in 'main_config.yaml'
+
+        Input/Output: None
+        """
+        cmd = "boardsize " + str(self.config['boardsize']) + "\n"
         self.process.stdin.write(cmd)
         self.process.stdin.flush()
         #skip lines of output from boardsize (Don't need)
@@ -78,7 +88,15 @@ class PuzzleEngine:
         self.process.stdout.readline()
 
     
-    def load_sgf(self, puzzle_name):
+    def loadsgf_cmd(self, puzzle_name):
+        """
+        Method to send a 'loadsgf' command to the running engine. 
+            - This will set the engine's board state to match that 
+               of the puzzle given in SGF format
+        
+        Input: The name of the puzzle to be loaded 
+        Output: None
+        """
         #Used to initialize board state so engine can solve a puzzle
         loadcmd = 'loadsgf ' + self.config['puzzles_path'] + puzzle_name + '\n'
         self.process.stdin.write(loadcmd)
@@ -86,6 +104,28 @@ class PuzzleEngine:
         #skip unwanted lines of output
         self.process.stdout.readline()
         self.process.stdout.readline()
+
+
+    def genmove_cmd(self, player):
+        """
+        Method to send a 'genmove' command to the running engine 
+        and read the result. 
+            - This tells the engine generate a move and play it on the board.
+
+        Input: The player to generate a move for, either B or W
+        Output: The GTP vertex of the engine-generated move, and the 
+                next player in the game (opponent of the input player)
+        """
+        genmovecmd = "genmove " + player + "\n"
+        self.process.stdin.write(genmovecmd)
+        self.process.stdin.flush()
+        genmove_response = self.process.stdout.readline()
+        genmove_response = genmove_response[2:4]
+        self.process.stdout.readline() #skip a line of output
+        curr_player = "B" if player == "W" else "W"
+        prev_player = player
+        return genmove_response, curr_player, prev_player
+
 
 
     def parse_sgf(self, puzzle_name):
@@ -113,33 +153,30 @@ class PuzzleEngine:
             parsed_move = elt.split("[")
             parsed_move[1] = parsed_move[1].replace("]", "")
             moves.append(parsed_move)
-        #Call method to get matrix representation of board and next player
-        return self.sgf_to_matrix(moves, self.engineconfig['boardsize'])
+        #return list of moves
+        curr_player = "B" if moves[-1][0] == "W" else "W"
+        prev_player = "B" if curr_player == "W" else "W"
+        return moves, curr_player, prev_player
 
 
-    def sgf_to_matrix(self, moves, size):
+    def sgf_to_matrix(self, moves):
         """
         Method to make a numpy matrix from a parsed SGF file 
 
         Input: 
             - moves: A list of moves, where each move is a list ['Player', 'GTP vertex']
-            - size: the size of the board 
         
-        Output:
-            - A 2-D numpy array corresponding to the board given by the SGF file 
-                -   1 = Black stones; -1 = White stones
+        Output: None, only updates (self.board)
         """
-        board = np.zeros((int(size), int(size)))
-        next_player = ""
+        curr_player = ""
         for elt in moves:
             row, col = self.sgf_vertex_to_idx(elt[1])
             if elt[0] == 'B':
-                board[row][col] = 1
-                next_player = 'W'
+                self.board[row][col] = 1
+                curr_player = 'W'
             else:
-                board[row][col] = -1
-                next_player = 'B'
-        return board, next_player
+                self.board[row][col] = -1
+                curr_player = 'B'
 
 
     def sgf_vertex_to_idx(self, v):
@@ -153,9 +190,28 @@ class PuzzleEngine:
         """
         letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'
                     'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's']
-        col = letters.index(v[0])
-        row = letters.index(v[1])
+        try:
+            col = letters.index(v[0].lower())
+        except ValueError as e:
+            col = int(v[0])
+        try:
+            row = letters.index(v[1])
+        except ValueError as e:
+            row = int(self.config["boardsize"]) - int(v[1])
         return row, col
+
+    def update_board(self, v, player):
+        """
+        Method to update the matrix representation of the board 
+        after a new move is played 
+
+        Input: a GTP vertex 
+        Output: No return, only updates self.board
+        """
+        row, col = self.sgf_vertex_to_idx(v)
+        print(f"\n\nRow:{row}  Col:{col}\n\n")
+        self.board[row][col] = 1 if player == "B" else -1
+        
 
 
     def save_test_result(self):
