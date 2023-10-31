@@ -12,6 +12,9 @@ engines_path: "/Users/blake/Research/Puzzle-Go/external_engines/"
 #Folder storing tests (sgf files)
 puzzles_path: "/Users/blake/Research/Puzzle-Go/puzzle_files/"
 
+#Folder to log datapoints from engines solving puzzles
+puzzle_logs_path: "/Users/blake/Research/Puzzle-Go/puzzle_logs"
+
 #Board size used for testing 
 boardsize: 7
 

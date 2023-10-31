@@ -41,6 +41,7 @@ class PuzzleEngine:
             response, curr_player, prev_player = self.genmove_cmd(curr_player)
             output.append(response)
 
+            self.score_engine(response, "D3", puzzle)
             #update the matrix representation of the board with the new move
             self.update_board(response, prev_player)
 
@@ -170,7 +171,7 @@ class PuzzleEngine:
         """
         curr_player = ""
         for elt in moves:
-            row, col = self.sgf_vertex_to_idx(elt[1])
+            row, col = self.gtp_vertex_to_idx(elt[1])
             if elt[0] == 'B':
                 self.board[row][col] = 1
                 curr_player = 'W'
@@ -179,7 +180,7 @@ class PuzzleEngine:
                 curr_player = 'B'
 
 
-    def sgf_vertex_to_idx(self, v):
+    def gtp_vertex_to_idx(self, v):
         """
         Method to convert gtp vertices of letters in the form 'column''row'
         into indices to be used with a matrix
@@ -208,11 +209,56 @@ class PuzzleEngine:
         Input: a GTP vertex 
         Output: No return, only updates self.board
         """
-        row, col = self.sgf_vertex_to_idx(v)
+        row, col = self.gtp_vertex_to_idx(v)
         print(f"\n\nRow:{row}  Col:{col}\n\n")
         self.board[row][col] = 1 if player == "B" else -1
         
+    def score_engine(self, move_played, answer, puzzle):
+        """
+        Method to score the engine's answer to a puzzle 
 
+        Input:
+            - move_played: the sgf vertex of the move that the engine played
+            - answer: the correct answer to the puzzle (optimal move)
+            - puzzle: the name of the SGF file containing the puzzle 
+
+        Output:
+            - None, just score the move played and save the score to a log file. 
+        """
+        if move_played == answer:
+            score = 1
+        else:
+            score = -1
+
+        self.save_puzzle_score(score, puzzle)
+        
+
+    def save_puzzle_score(self, score, puzzle):
+        """
+        Method to log scores from each test of an engine solving a puzzle
+
+        Input: 
+            - score: the score from solving the puzzle (1 for correct, -1 for incorrect)
+            - puzzle: the name of the sgf puzzle being solved
+
+        Output: 
+            - None, just append new result to a file "puzzleName_logs.txt"
+        """
+        puzzle_log_folder = puzzle.replace(".sgf", "_logs")
+        log_path = os.path.join(self.config["puzzle_logs_path"], self.engineconfig["name"], puzzle_log_folder)
+        
+        if not os.path.exists(log_path):
+            os.makedirs(log_path)
+
+        filename = puzzle.replace(".sgf", "_scores.txt")
+        score_file = os.path.join(log_path, filename)
+        if not os.path.isfile(score_file):
+            log = open(score_file, 'w')
+            log.close()
+        log = open(score_file, 'a')
+        log.write(str(score) + "\n")
+        log.close()
+        
 
     def save_test_result(self):
         #Do Nothing yet
