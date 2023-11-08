@@ -16,60 +16,73 @@ class PuzzleEngine:
         #Run the necessary tests
 
         for puzzle in self.puzzles:
-            #Start the external engine
-            self.process = subprocess.Popen(self.engineconfig['command'], stdin=PIPE, stdout=PIPE, 
-                                                cwd=self.engineconfig['cwdpath'], encoding="utf8")
+            for _ in range(self.config["tests_per_puzzle"]):
+                #Start the external engine
+                self.process = subprocess.Popen(self.engineconfig['command'], stdin=PIPE, stdout=PIPE, 
+                                                    cwd=self.engineconfig['cwdpath'], encoding="utf8")
 
-            self.board = np.zeros((int(self.config['boardsize']), int(self.config['boardsize'])))
-            #Used for testing functionality
-            output = []
+                self.board = np.zeros((int(self.config['boardsize']), int(self.config['boardsize'])))
+                #Used for testing functionality
+                output = []
 
-            #set boardsize for game
-            self.boardsize_cmd()
+                #set boardsize for game
+                self.boardsize_cmd()
 
-            #load in specified sgf file
-            self.loadsgf_cmd(puzzle)
+                print("\nLog for: ", puzzle)
+                #load in specified sgf file
+                self.loadsgf_cmd(puzzle)
 
-            #process SGF file for internal use
-            moves, curr_player, prev_player = self.parse_sgf(puzzle)
+                #process SGF file for internal use
+                moves, answer, curr_player, prev_player = self.parse_sgf(puzzle)
+                output.append("\nProper Answer: ")
+                output.append(answer)
+                output.append("\nMoves in SGF: ")
+                output.append(moves)
+                #create matrix from SGF moves (stored in self.board)
+                self.sgf_to_matrix(moves)
 
-            #create matrix from SGF moves (stored in self.board)
-            self.sgf_to_matrix(moves)
 
+                #have engine generate move for the next player in the game and save result
+                response, curr_player, prev_player = self.genmove_cmd(curr_player)
+                engineMove = "Enging Made Move: " + response
+                output.append(response)
 
-            #have engine generate move for the next player in the game and save result
-            response, curr_player, prev_player = self.genmove_cmd(curr_player)
-            output.append(response)
+                if len(answer) == 0:
+                    ans_for_score = "gg"
+                else:
+                    ans_for_score = answer[1]
+                
+                self.score_engine(response, ans_for_score, puzzle)
+                #update the matrix representation of the board with the new move
+                self.update_board(response, prev_player)
 
-            self.score_engine(response, "D3", puzzle)
-            #update the matrix representation of the board with the new move
-            self.update_board(response, prev_player)
+                #display new board
+                """self.process.stdin.write('showboard\n')
+                self.process.stdin.flush()
+                self.process.stdout.readline() #skip a line of output
+                #read in a 7x7 board and save it
+                text=""
+                for i in range(8):
+                    text = self.process.stdout.readline()
+                    output.append(text)"""
 
-            #display new board
-            self.process.stdin.write('showboard\n')
-            self.process.stdin.flush()
-            self.process.stdout.readline() #skip a line of output
-            #read in a 7x7 board and save it
-            text=""
-            for i in range(8):
-                text = self.process.stdout.readline()
-                output.append(text)
+                #quit katago
+                self.process.stdin.write('quit\n')
+                self.process.stdin.flush()
+                response = "Quit response: " + self.process.stdout.readline()
 
-            #quit katago
-            self.process.stdin.write('quit\n')
-            self.process.stdin.flush()
-            response = "Quit response: " + self.process.stdout.readline()
+                #print results
+                print("\n--RESULTS--\n")  
+                """for i in range(len(output)):
+                    print(output[i].replace("\n", ""))"""
+                for elt in output:
+                    print(elt)
+                
+                print(self.board)
+                print("Next Player: ", curr_player)
+                print("Previous Player: ", prev_player)
 
-            #print results
-            print("\n--RESULTS--\n")  
-            for i in range(len(output)):
-                print(output[i].replace("\n", ""))
-            
-            print(self.board)
-            print("Next Player: ", curr_player)
-            print("Previous Player: ", prev_player)
-
-            print("\n\n\n\n\n\n-------------------------\n\n\n\n\n")
+                print("\n\n\n\n\n\n-------------------------\n\n\n\n\n")
 
 
 
@@ -125,6 +138,16 @@ class PuzzleEngine:
         self.process.stdout.readline() #skip a line of output
         curr_player = "B" if player == "W" else "W"
         prev_player = player
+
+        letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'
+                    'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's']
+        try:
+            genmove_response = genmove_response[0].lower() + letters[7-int(genmove_response[1])]
+            
+        except ValueError as e:
+            genmove_response = genmove_response.lower()
+            print("No switch needed")
+
         return genmove_response, curr_player, prev_player
 
 
@@ -146,18 +169,32 @@ class PuzzleEngine:
             temp = f.read()
         temp = temp.replace("(", "").replace(")", "")
 
-        #Get a list of moves from the SGF file
+        #Get a list of moves and puzzle answer from the SGF file
         sgf_info = temp.split(';')
         sgf_info = sgf_info[2:]
         moves = []
+        """ans = {player: ""
+                row: -1
+                col: -1}"""
+        ans = []
         for elt in sgf_info:
+            if "C" in elt:
+                finalElt = elt.split("C")
+                elt = finalElt[0]
+
+                raw_ans = finalElt[1].split(" ")[1]
+                ans = raw_ans.split(",")
+                ans[1] = ans[1].replace("]", "")        
+
             parsed_move = elt.split("[")
             parsed_move[1] = parsed_move[1].replace("]", "")
             moves.append(parsed_move)
-        #return list of moves
+
+        #get current/next player
         curr_player = "B" if moves[-1][0] == "W" else "W"
         prev_player = "B" if curr_player == "W" else "W"
-        return moves, curr_player, prev_player
+        #return all information from SGF file
+        return moves, ans, curr_player, prev_player
 
 
     def sgf_to_matrix(self, moves):
@@ -230,10 +267,10 @@ class PuzzleEngine:
         else:
             score = -1
 
-        self.save_puzzle_score(score, puzzle)
+        self.save_puzzle_score(score, puzzle, move_played)
         
 
-    def save_puzzle_score(self, score, puzzle):
+    def save_puzzle_score(self, score, puzzle, move_played):
         """
         Method to log scores from each test of an engine solving a puzzle
 
@@ -256,7 +293,8 @@ class PuzzleEngine:
             log = open(score_file, 'w')
             log.close()
         log = open(score_file, 'a')
-        log.write(str(score) + "\n")
+        score_info = move_played + "," + str(score) 
+        log.write(score_info + "\n")
         log.close()
         
 
