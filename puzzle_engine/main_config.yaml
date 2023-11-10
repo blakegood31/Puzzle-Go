@@ -21,9 +21,12 @@ boardsize: 7
 #Set to true if you want to run all tests
 runalltests: true
 
+#Test Puzzle Rotations
+rotate_puzzles: true
+
 #Only need to fill in if you want to list specific puzzles to run
 run_tests:
   - "None"
 
 #Number of tests to run per puzzle
-tests_per_puzzle: 3
+tests_per_puzzle: 1

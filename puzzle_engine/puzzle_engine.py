@@ -3,6 +3,7 @@ from subprocess import PIPE, Popen
 import yaml
 import numpy as np
 import os
+from matplotlib import pyplot as plt
 
 class PuzzleEngine:
     def __init__(self, config, puzzles, engine_config):
@@ -10,18 +11,18 @@ class PuzzleEngine:
         self.puzzles = puzzles
         self.process = None
         self.engineconfig = engine_config
-        self.board = None
+        self.board = np.zeros((int(self.config['boardsize']), int(self.config['boardsize'])))
 
     def run_tests(self):
         #Run the necessary tests
-
         for puzzle in self.puzzles:
             for _ in range(self.config["tests_per_puzzle"]):
                 #Start the external engine
                 self.process = subprocess.Popen(self.engineconfig['command'], stdin=PIPE, stdout=PIPE, 
                                                     cwd=self.engineconfig['cwdpath'], encoding="utf8")
 
-                self.board = np.zeros((int(self.config['boardsize']), int(self.config['boardsize'])))
+                #self.board = np.zeros((int(self.config['boardsize']), int(self.config['boardsize'])))
+                
                 #Used for testing functionality
                 output = []
 
@@ -39,7 +40,7 @@ class PuzzleEngine:
                 output.append("\nMoves in SGF: ")
                 output.append(moves)
                 #create matrix from SGF moves (stored in self.board)
-                self.sgf_to_matrix(moves)
+                gtp_board = self.sgf_to_matrix(moves)
 
 
                 #have engine generate move for the next player in the game and save result
@@ -84,6 +85,23 @@ class PuzzleEngine:
 
                 print("\n\n\n\n\n\n-------------------------\n\n\n\n\n")
 
+        moves = []
+        rewards = []
+        with open("/Users/blake/Research/Puzzle-Go/puzzle_logs/Katago/Beginner_Exercise1V2_logs/Beginner_Exercise1V2_scores.txt") as f:
+            scores = f.readlines()
+            for s in scores:
+                parsed = s.split(',')
+                if parsed[0] in moves:
+                    idx = moves.index(parsed[0])
+                    rewards[idx] = rewards[idx] + 1
+                else:
+                    moves.append(parsed[0])
+                    rewards.append(1)
+            
+        fig = plt.figure(figsize = (10, 5))
+        plt.bar(moves, rewards, color='green', width=0.4)
+        plt.show()
+
 
 
     def boardsize_cmd(self):
@@ -112,7 +130,7 @@ class PuzzleEngine:
         Output: None
         """
         #Used to initialize board state so engine can solve a puzzle
-        loadcmd = 'loadsgf ' + self.config['puzzles_path'] + puzzle_name + '\n'
+        loadcmd = 'loadsgf ' + puzzle_name + '\n'
         self.process.stdin.write(loadcmd)
         self.process.stdin.flush()
         #skip unwanted lines of output
@@ -164,7 +182,7 @@ class PuzzleEngine:
             - Next player 
         """
         #Get SGF file as text
-        filepath = self.config['puzzles_path'] + puzzle_name
+        filepath = puzzle_name
         with open(filepath) as f:
             temp = f.read()
         temp = temp.replace("(", "").replace(")", "")
@@ -173,9 +191,6 @@ class PuzzleEngine:
         sgf_info = temp.split(';')
         sgf_info = sgf_info[2:]
         moves = []
-        """ans = {player: ""
-                row: -1
-                col: -1}"""
         ans = []
         for elt in sgf_info:
             if "C" in elt:
@@ -206,16 +221,20 @@ class PuzzleEngine:
         
         Output: None, only updates (self.board)
         """
+        gtp_board = np.array(['00' for _ in range(49)], dtype='a5').reshape(7,7)
         curr_player = ""
         for elt in moves:
             row, col = self.gtp_vertex_to_idx(elt[1])
             if elt[0] == 'B':
                 self.board[row][col] = 1
+                gtp_board[row][col] = elt[1]
                 curr_player = 'W'
             else:
                 self.board[row][col] = -1
+                gtp_board[row][col] = elt[1]
                 curr_player = 'B'
 
+        return gtp_board
 
     def gtp_vertex_to_idx(self, v):
         """
@@ -270,6 +289,143 @@ class PuzzleEngine:
         self.save_puzzle_score(score, puzzle, move_played)
         
 
+    def get_sgf_rotations(self, move_board, moves, puzzle):
+        """
+        This is a method to get multiple rotations of a given SGF file. It 
+        is meant to ensure a more thorough testing of the chosen models, but 
+        this can be turned off in main_config.yaml. 
+
+        Inputs: 
+            - move_board: a 2D numpy matrix containing the gtp vertices in their 
+                            corresponding locations in the matrix 
+            - moves: an array of each move in the sgf file, in the form "PLAYER", "vertex"
+            - puzzle: the "root" SGF puzzle to make rotations of 
+        
+        Returns: 
+            A list 'new_puzzles', containing the filepaths of the new rotated SGF 
+            files created. This also saves the SGF files under the corresponding 
+            'puzzle_files' directory
+        """
+        
+        rotations = [90, 180, 270]
+        check_rots = [90, 180, 270]
+
+        split_puzzle = puzzle.split("/")
+        path_elements = split_puzzle[:-1]
+        sgf_path = "/".join(path_elements) + "/"
+        puzzle_name = split_puzzle[-1]
+        tag = puzzle_name.replace(".sgf", "")
+
+        for rot in check_rots:
+            new_puzzle_name = tag + "_" + str(rot) + "deg.sgf"
+            new_puzzle_path = os.path.join(sgf_path, new_puzzle_name)
+            if os.path.exists(new_puzzle_path):
+                print("DONT DO ANYTHING FOR :", new_puzzle_path)
+                try:
+                    rotations.remove(rot)
+                except:
+                    print(f'Rotation {rot} already removed')
+            else: 
+                print("WILL MAKE NEW PUZZLE FOR: ", new_puzzle_path)
+        
+        move_order = []
+        for m in moves:
+            move_order.append(m[1])
+
+        new_rot = np.ndarray.copy(move_board)
+        new_puzzles = []
+        for i in range(len(rotations)):
+            new_vertices = []
+            new_rot = np.rot90(new_rot)
+            cp = "B"
+            for m in move_order:
+                result = list(zip(*np.where(new_rot == bytes(m, 'utf-8'))))[0]
+                row, col = result[0], result[1]
+                v = self.idx_to_sgf_vertex(row, col)
+                new_sgf_v = ";" + cp + "[" + v + "]"
+                new_vertices.append(new_sgf_v)
+                cp = "W" if cp == "B" else "B"
+            new_puzzles.append(self.make_rotated_sgf(puzzle, rotations[i], new_vertices))
+        return new_puzzles
+
+    def idx_to_sgf_vertex(self, row, col):
+        """
+        This is a method to get the gtp equivalent of a given (row, column) index 
+        in a 2D matrix. Used as a helper method for getting SGF rotations 
+
+        Inputs: row, col -- matrix indices to be translated to a gtp vertex
+
+        Returns: gtp_vertex -- the gtp equivalent of the given (row, col)
+        """
+        letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'
+                'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's']
+
+        gtp_vertex = letters[col] + letters[row]
+        return gtp_vertex
+
+
+    def make_rotated_sgf(self, puzzle, rot, vertices):
+        """
+        This is a method used to save a new SGF file of a rotated board, 
+        keeping the same move order and configuration settings as the 
+        original file. 
+
+        Input: 
+            - puzzle: the file path of the original SGF file being rotated
+            - rot: a number 90, 180, or 270 used for the new file name 
+            - vertices: a list of GTP vertices to be written to the new SGF file 
+
+        Returns: 
+            - new_puzzle_path: the path of the new SGF file that has been saved in the 
+                                proper directory under 'puzzle_files'
+        """
+
+        #Get SGF file as text
+        split_puzzle = puzzle.split("/")
+        puzzle_path = split_puzzle[:-1]
+        path = "/".join(puzzle_path) + "/"
+
+        with open(puzzle) as f:
+            temp = f.read()
+
+        sgf_info = temp.split(';')
+        end = None
+        if 'C' in sgf_info[-1]:
+            end = "C" + sgf_info[-1].split("C")[-1]
+
+        split_puzzle = puzzle.split("/")
+        path_elements = split_puzzle[:-1]
+        sgf_path = "/".join(path_elements) + "/"
+        puzzle_name = split_puzzle[-1]
+        tag = puzzle_name.replace(".sgf", "")
+        new_puzzle_name = tag + "_" + str(rot) + "deg.sgf"
+
+        new_puzzle_path = os.path.join(sgf_path, new_puzzle_name)
+        print("MAKING NEW SGF FOR: ", new_puzzle_path)
+        if not os.path.isfile(new_puzzle_path):
+            sgf = open(new_puzzle_path, 'w')
+            sgf.close()
+
+        sgf = open(new_puzzle_path, 'a')
+        header = sgf_info[0] + ";" + sgf_info[1]
+        sgf.write(header)
+
+        for v in vertices:
+            sgf.write(v)
+            
+        if end is not None:
+            sgf.write(end)
+        else:
+            end = ")"
+            sgf.write(end)
+        sgf.close()
+
+        return new_puzzle_path
+
+
+
+
+
     def save_puzzle_score(self, score, puzzle, move_played):
         """
         Method to log scores from each test of an engine solving a puzzle
@@ -281,13 +437,18 @@ class PuzzleEngine:
         Output: 
             - None, just append new result to a file "puzzleName_logs.txt"
         """
-        puzzle_log_folder = puzzle.replace(".sgf", "_logs")
-        log_path = os.path.join(self.config["puzzle_logs_path"], self.engineconfig["name"], puzzle_log_folder)
+        raw_puzzle_name = puzzle.split("/")[-1]
+        temp = raw_puzzle_name.split("_")
+        if len(temp) > 2:
+            folder_name = temp[0] + "_" + temp[1] + "_logs"
+        else:
+            folder_name = raw_puzzle_name.replace(".sgf", "_logs")
+        log_path = os.path.join(self.config["puzzle_logs_path"], self.engineconfig["name"], folder_name)
         
         if not os.path.exists(log_path):
             os.makedirs(log_path)
 
-        filename = puzzle.replace(".sgf", "_scores.txt")
+        filename = raw_puzzle_name.replace(".sgf", "_scores.txt")
         score_file = os.path.join(log_path, filename)
         if not os.path.isfile(score_file):
             log = open(score_file, 'w')

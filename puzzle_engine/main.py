@@ -39,7 +39,31 @@ if __name__ == '__main__':
 
 
     #Gather all the puzzles to test the engines on
-    puzzles = os.listdir(config["puzzles_path"])
+    puzzle_folders = os.listdir(config["puzzles_path"])
+
+    puzzles = []
+    for lvl in puzzle_folders:
+        path = config["puzzles_path"] + lvl + "/"
+        found = os.listdir(path)
+        for elt in found:
+            pname = path + elt
+            puzzles.append(pname)
+
+    #If needed, get the necessary rotations of the given SGF puzzles
+    if config["rotate_puzzles"]:
+        aux = PuzzleEngine(config, puzzles, None)
+        rotated_puzzles = []
+        for puzzle in puzzles:
+            if "deg" not in puzzle:
+                moves, answer, curr_player, prev_player = aux.parse_sgf(puzzle)
+                gtp_board = aux.sgf_to_matrix(moves)
+                new_puzzles = aux.get_sgf_rotations(gtp_board, moves, puzzle)
+                if len(new_puzzles) > 0:
+                    rotated_puzzles.extend(new_puzzles)
+            else:
+                print("DIDNT CALL ROTATE FOR: ", puzzle)
+        puzzles.extend(rotated_puzzles)
+
     #Run the tests for each engine
     for engine in engines:
         engine_config = load_config(engines[engine]["config_path"])
