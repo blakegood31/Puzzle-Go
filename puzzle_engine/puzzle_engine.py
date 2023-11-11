@@ -20,8 +20,6 @@ class PuzzleEngine:
                 #Start the external engine
                 self.process = subprocess.Popen(self.engineconfig['command'], stdin=PIPE, stdout=PIPE, 
                                                     cwd=self.engineconfig['cwdpath'], encoding="utf8")
-
-                #self.board = np.zeros((int(self.config['boardsize']), int(self.config['boardsize'])))
                 
                 #Used for testing functionality
                 output = []
@@ -29,13 +27,12 @@ class PuzzleEngine:
                 #set boardsize for game
                 self.boardsize_cmd()
 
-                print("\nLog for: ", puzzle)
                 #load in specified sgf file
                 self.loadsgf_cmd(puzzle)
 
                 #process SGF file for internal use
                 moves, answer, curr_player, prev_player = self.parse_sgf(puzzle)
-                output.append("\nProper Answer: ")
+                output.append("\nExpected Answer: ")
                 output.append(answer)
                 output.append("\nMoves in SGF: ")
                 output.append(moves)
@@ -45,8 +42,8 @@ class PuzzleEngine:
 
                 #have engine generate move for the next player in the game and save result
                 response, curr_player, prev_player = self.genmove_cmd(curr_player)
-                engineMove = "Enging Made Move: " + response
-                output.append(response)
+                engineMove = "Engine Made Move: " + response
+                output.append(engineMove)
 
                 if len(answer) == 0:
                     ans_for_score = "gg"
@@ -70,12 +67,9 @@ class PuzzleEngine:
                 #quit katago
                 self.process.stdin.write('quit\n')
                 self.process.stdin.flush()
-                response = "Quit response: " + self.process.stdout.readline()
 
-                #print results
+                #print results (used for debugging)
                 print("\n--RESULTS--\n")  
-                """for i in range(len(output)):
-                    print(output[i].replace("\n", ""))"""
                 for elt in output:
                     print(elt)
                 
@@ -83,7 +77,7 @@ class PuzzleEngine:
                 print("Next Player: ", curr_player)
                 print("Previous Player: ", prev_player)
 
-                print("\n\n\n\n\n\n-------------------------\n\n\n\n\n")
+                print("\n\n-------------------------\n\n\n\n\n")
 
         moves = []
         rewards = []
@@ -156,7 +150,6 @@ class PuzzleEngine:
         self.process.stdout.readline() #skip a line of output
         curr_player = "B" if player == "W" else "W"
         prev_player = player
-
         letters = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'
                     'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's']
         try:
@@ -164,7 +157,6 @@ class PuzzleEngine:
             
         except ValueError as e:
             genmove_response = genmove_response.lower()
-            print("No switch needed")
 
         return genmove_response, curr_player, prev_player
 
@@ -266,7 +258,6 @@ class PuzzleEngine:
         Output: No return, only updates self.board
         """
         row, col = self.gtp_vertex_to_idx(v)
-        print(f"\n\nRow:{row}  Col:{col}\n\n")
         self.board[row][col] = 1 if player == "B" else -1
         
     def score_engine(self, move_played, answer, puzzle):
@@ -320,13 +311,10 @@ class PuzzleEngine:
             new_puzzle_name = tag + "_" + str(rot) + "deg.sgf"
             new_puzzle_path = os.path.join(sgf_path, new_puzzle_name)
             if os.path.exists(new_puzzle_path):
-                print("DONT DO ANYTHING FOR :", new_puzzle_path)
                 try:
                     rotations.remove(rot)
                 except:
-                    print(f'Rotation {rot} already removed')
-            else: 
-                print("WILL MAKE NEW PUZZLE FOR: ", new_puzzle_path)
+                    print(f'Rotation {rot} already removed. New rotation will not be made')
         
         move_order = []
         for m in moves:
@@ -401,7 +389,7 @@ class PuzzleEngine:
         new_puzzle_name = tag + "_" + str(rot) + "deg.sgf"
 
         new_puzzle_path = os.path.join(sgf_path, new_puzzle_name)
-        print("MAKING NEW SGF FOR: ", new_puzzle_path)
+        print("Making new SGF rotation for: ", new_puzzle_path)
         if not os.path.isfile(new_puzzle_path):
             sgf = open(new_puzzle_path, 'w')
             sgf.close()
@@ -437,18 +425,24 @@ class PuzzleEngine:
         Output: 
             - None, just append new result to a file "puzzleName_logs.txt"
         """
+
+        #Construct log folder name from SGF filename 
         raw_puzzle_name = puzzle.split("/")[-1]
+        raw_puzzle_name = raw_puzzle_name.replace(".sgf", "")
         temp = raw_puzzle_name.split("_")
-        if len(temp) > 2:
-            folder_name = temp[0] + "_" + temp[1] + "_logs"
-        else:
-            folder_name = raw_puzzle_name.replace(".sgf", "_logs")
+        folder_name = ""
+        for elt in temp:
+            if "deg" not in elt:
+                folder_name = folder_name + elt + "_"
+        folder_name = folder_name + "logs"
         log_path = os.path.join(self.config["puzzle_logs_path"], self.engineconfig["name"], folder_name)
         
+        #Make log directory if needed
         if not os.path.exists(log_path):
             os.makedirs(log_path)
 
-        filename = raw_puzzle_name.replace(".sgf", "_scores.txt")
+        #Get log file name and save the result
+        filename = raw_puzzle_name +  "_scores.txt"
         score_file = os.path.join(log_path, filename)
         if not os.path.isfile(score_file):
             log = open(score_file, 'w')

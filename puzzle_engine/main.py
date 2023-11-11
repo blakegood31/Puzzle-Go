@@ -40,7 +40,7 @@ if __name__ == '__main__':
 
     #Gather all the puzzles to test the engines on
     puzzle_folders = os.listdir(config["puzzles_path"])
-
+    print(puzzle_folders)
     puzzles = []
     for lvl in puzzle_folders:
         path = config["puzzles_path"] + lvl + "/"
@@ -61,7 +61,6 @@ if __name__ == '__main__':
                 if len(new_puzzles) > 0:
                     rotated_puzzles.extend(new_puzzles)
             else:
-                print("DIDNT CALL ROTATE FOR: ", puzzle)
         puzzles.extend(rotated_puzzles)
 
     #Run the tests for each engine

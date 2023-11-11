@@ -5,6 +5,8 @@ engines:
   - "katago"
   - "leela"
   - "test"
+  - "model_n"
+  - "model_o"
 
 #Engines Folder
 engines_path: "/Users/blake/Research/Puzzle-Go/external_engines/"
