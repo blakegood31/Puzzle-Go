@@ -60,7 +60,6 @@ if __name__ == '__main__':
                 new_puzzles = aux.get_sgf_rotations(gtp_board, moves, puzzle)
                 if len(new_puzzles) > 0:
                     rotated_puzzles.extend(new_puzzles)
-            else:
         puzzles.extend(rotated_puzzles)
 
     #Run the tests for each engine
